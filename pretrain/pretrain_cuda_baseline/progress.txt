@@ -1,0 +1,57 @@
+WARNING: CPU IP/backtrace sampling not supported, disabling.
+Try the 'nsys status --environment' command to learn more.
+
+WARNING: CPU context switch tracing not supported, disabling.
+Try the 'nsys status --environment' command to learn more.
+
+Training with a single process on 1 device (cuda).
+Model deit_tiny_patch16_224 created, param count:5717416
+Created AdamW (adamw) optimizer: lr: 0.001, betas: (0.9, 0.999), eps: 1e-08, weight_decay: 0.05, amsgrad: False, foreach: None, maximize: False, capturable: False, differentiable: False, fused: None
+Using native Torch AMP. Training in mixed precision.
+Traceback (most recent call last):
+  File "/home/fsoler/projects/pdp2026/pretrain/pretrain_cuda_baseline/pretrain.py", line 1222, in <module>
+    main()
+  File "/home/fsoler/projects/pdp2026/pretrain/pretrain_cuda_baseline/pretrain.py", line 1003, in main
+    final_loss = train_loaderfull(
+                 ^^^^^^^^^^^^^^^^^
+  File "/home/fsoler/projects/pdp2026/pretrain/pretrain_cuda_baseline/pretrain.py", line 1215, in train_loaderfull
+    del inputs
+        ^^^^^^
+UnboundLocalError: cannot access local variable 'inputs' where it is not associated with a value
+E1108 21:42:07.849000 1319609 torch/distributed/elastic/multiprocessing/api.py:869] failed (exitcode: 1) local_rank: 0 (pid: 1319668) of binary: /home/fsoler/localenvs/rtfdslenv/bin/python
+Traceback (most recent call last):
+  File "/home/fsoler/localenvs/rtfdslenv/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/fsoler/localenvs/rtfdslenv/lib/python3.11/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 355, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/fsoler/localenvs/rtfdslenv/lib/python3.11/site-packages/torch/distributed/run.py", line 919, in main
+    run(args)
+  File "/home/fsoler/localenvs/rtfdslenv/lib/python3.11/site-packages/torch/distributed/run.py", line 910, in run
+    elastic_launch(
+  File "/home/fsoler/localenvs/rtfdslenv/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 138, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/fsoler/localenvs/rtfdslenv/lib/python3.11/site-packages/torch/distributed/launcher/api.py", line 269, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+pretrain.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-08_21:42:07
+  host      : c03
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 1319668)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
+Generating '/tmp/nsys-report-782b.qdstrm'
+[1/1] [0%                          ] baseprof.nsys-rep[1/1] [0%                          ] baseprof.nsys-rep[1/1] [=======37%                  ] baseprof.nsys-rep[1/1] [==================75%       ] baseprof.nsys-rep[1/1] [6%                          ] baseprof.nsys-rep[1/1] [7%                          ] baseprof.nsys-rep[1/1] [8%                          ] baseprof.nsys-rep[1/1] [6%                          ] baseprof.nsys-rep[1/1] [==============62%           ] baseprof.nsys-rep[1/1] [==================78%       ] baseprof.nsys-rep[1/1] [========================100%] baseprof.nsys-rep[1/1] [========================100%] baseprof.nsys-rep
+Generated:
+    /home/fsoler/projects/pdp2026/pretrain/pretrain_cuda_baseline/baseprof.nsys-rep
