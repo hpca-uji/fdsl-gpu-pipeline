@@ -561,7 +561,7 @@ group.add_argument(
 ),
 group.add_argument(
     "--aug-repeats",
-    type=float,
+    type=int,
     default=0,
     help="Number of augmentation repetitions (distributed training only) (default: 0)",
 )
@@ -721,7 +721,7 @@ group.add_argument(
 )
 group.add_argument(
     "-j",
-    "--workers",
+    "--dataset-workers",
     type=int,
     default=4,
     metavar="N",
@@ -988,13 +988,18 @@ def main():
             model, backend=args.torchcompile, mode=args.torchcompile_mode
         )
 
+    if args.aug_repeats > 1:
+        assert (
+            args.dataset_workers == 1
+        ), "aug_repeats > 1 requires a single dataset worker"
+
     # Create vatom dataset
     dataset_train = create_vatom_dataset(
         dataset_cfg_path=args.dataset_cfg_path,
         dataset_cfg_select=args.dataset_cfg_select,
         device=args.rank,
         gpus=args.world_size,
-        aug_repeats=int(args.aug_repeats),
+        aug_repeats=args.aug_repeats,
         init_datapoints=init_datapoints,
         nclasses=args.num_classes,
         res=args.kernel_res,
@@ -1049,7 +1054,7 @@ def main():
         gaussian_blur_prob=args.gaussian_blur_prob,
         auto_augment=args.aa,
         interpolation=train_interpolation,
-        num_workers=args.workers,
+        num_workers=args.dataset_workers,
     )
 
     loader_train = create_loader_from_iterabledataset(

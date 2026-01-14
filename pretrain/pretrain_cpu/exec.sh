@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Activate virtualenv
-source $HOME/localenvs/rtfdslenv/bin/activate
-
 ## Parameters ##
 
 # Dataset
@@ -10,6 +7,7 @@ DATASET_CFG="../config/classes.cfg"
 DATASET_SIZE=300000256
 RES=224
 KERNEL_RES=512
+DATASET_WORKERS=8
 
 # Model Parameters
 MODEL="deit_tiny_patch16_224"
@@ -22,7 +20,7 @@ WARMUP_ITERS=5000
 LR=0.001
 OPT="adamw"
 WEIGHT_DECAY=0.05
-BATCH_SIZE=1024
+BATCH_SIZE=256
 SCHED="step"
 
 # Data augmentation parameters
@@ -35,8 +33,9 @@ SMOOTHING=0.1
 
 # Pretrain
 torchrun --nproc_per_node=1 pretrain.py \
-    --dataset-cfg-path $DATASET_CFG --dataset-size $DATASET_SIZE --res $RES --kernel-res $KERNEL_RES --experiment cpu \
-    --model $MODEL --num-classes $NUM_CLASSES --amp --log-interval 50 \
+    --dataset-cfg-path $DATASET_CFG --dataset-size $DATASET_SIZE -j $DATASET_WORKERS \
+    --res $RES --kernel-res $KERNEL_RES --experiment cpu \
+    --model $MODEL --num-classes $NUM_CLASSES --amp --log-interval 5 \
     --warmup-iters $WARMUP_ITERS --lr $LR --opt $OPT --weight-decay $WEIGHT_DECAY -b $BATCH_SIZE --sched $SCHED \
-    --aa rand-m9-mstd0.5-inc1 --aug-repeats $AUG_REPEATS -j 8 \
+    --aa rand-m9-mstd0.5-inc1 --aug-repeats $AUG_REPEATS \
     --mixup $MIXUP --cutmix $CUTMIX --reprob $REPROB --drop-path $DROP_PATH --smoothing $SMOOTHING &> progress.txt

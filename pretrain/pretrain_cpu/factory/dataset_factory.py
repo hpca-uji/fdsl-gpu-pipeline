@@ -8,8 +8,6 @@ from torch.utils.data import IterableDataset, get_worker_info
 from PIL import Image, ImageDraw
 import noise
 
-# from numba import njit, prange, types
-
 
 def genvatom(
     img,
@@ -172,7 +170,6 @@ class VatomDataset(IterableDataset):
         device: int,
         gpus: int,
         config: SectionProxy,
-        aug_repeats: int,
     ):
         # Initialize vars
         self.init_datapoints = init_datapoints
@@ -181,7 +178,6 @@ class VatomDataset(IterableDataset):
         self.res = res
         self.device = device
         self.gpus = gpus
-        self.aug_repeats = aug_repeats
 
         # Get vars from config
         self.nvertex_min = config.getint("nvertex_min")
@@ -272,63 +268,177 @@ class VatomDataset(IterableDataset):
 
     def __iter__(self):
 
+        # Get worker info
         worker_info = get_worker_info()
-        workers = worker_info.num_workers
+        num_workers = worker_info.num_workers
         worker_id = worker_info.id
+        gpu_id = self.device
 
-        # Global sample index to start from
-        idx = self.init_datapoints + worker_id * self.gpus
+        # Compute global workers
+        global_worker_id = gpu_id * num_workers + worker_id
+        total_workers = num_workers * self.gpus
+
+        # Compute idx for global worker
+        idx = self.init_datapoints + global_worker_id
 
         while True:
 
-            # Compute label
-            class_id = self.generate_label(idx + self.device)
+            # Compute labels and yield
+            class_id = self.generate_label(idx)
 
             # Gen image
-            img = self.generate_image(idx + self.device, class_id)
+            img = self.generate_image(idx, class_id)
             # Apply data_aug if needed
             if self.data_aug:
                 img = self.data_aug(img)
 
             yield img, class_id
 
-            idx += workers * self.gpus
+            # Increase idx given total global workers
+            idx += total_workers
 
 
-class BAVatomDataset(VatomDataset):
+## Dataset for vatoms with BatchAugmentation with aug repeats
+class VatomDatasetRepeats(IterableDataset):
+    def __init__(
+        self,
+        init_datapoints: int,
+        nclasses: int,
+        res: int,
+        device: int,
+        gpus: int,
+        config: SectionProxy,
+        aug_repeats: int,
+    ):
+        # Initialize vars
+        self.init_datapoints = init_datapoints
+        self.nclasses = nclasses
+        self.data_aug = None
+        self.res = res
+        self.device = device
+        self.gpus = gpus
+        self.aug_repeats = aug_repeats
+
+        # Assert enough GPUs for aug repeats
+        assert (
+            self.gpus % self.aug_repeats == 0
+        ), "aug_repeats must divide number of GPUs exactly (this also enforces GPUs >= aug_repeats)"
+
+        # Get vars from config
+        self.nvertex_min = config.getint("nvertex_min")
+        self.nvertex_max = config.getint("nvertex_max")
+        self.norbits_min = config.getint("norbits_min")
+        self.norbits_max = config.getint("norbits_max")
+        self.oval_max = config.getint("oval_max")
+        self.freq_min = config.getint("freq_min")
+        self.freq_max = config.getint("freq_max")
+        self.noisecoef_min = config.getint("noisecoef_min")
+        self.startrad_min = config.getint("startrad_min")
+        self.linewidth_max = config.getfloat("linewidth_max")
+        self.seed = config.getint("seed")
+
+        # Compute maximum number of vertex per vatom
+        self.totalvertex_max = self.nvertex_max * self.norbits_max
+
+        # Generate classes
+        self.classes = self.gen_classes()
+
+    def generate_image(self, idx, class_id):
+
+        # Create empty image
+        img = Image.new("RGB", (self.res, self.res), (0, 0, 0))
+
+        genvatom_optimized(
+            img,
+            *self.classes[class_id],
+            self.res,
+            idx,
+        )
+
+        return img
+
+    def generate_label(self, idx) -> torch.Tensor:
+
+        g = torch.Generator().manual_seed(idx)
+        return torch.randint(0, self.nclasses, (1,), generator=g).item()
+
+    def gen_classes(self) -> list[list]:
+        """Function that creates array with different class parameters"""
+
+        # Set generation seed
+        random.seed(self.seed)
+
+        # Create empty list and iterate for nclasses
+        classes = []
+        for i in range(self.nclasses):
+
+            # Generate random nvertex and norbits
+            nvertex = random.randint(self.nvertex_min, self.nvertex_max)
+            norbits = random.randint(self.norbits_min, self.norbits_max)
+
+            # Generate oval rates
+            ovalx = random.uniform(1, self.oval_max)
+            ovaly = random.uniform(1, self.oval_max)
+
+            # Generate sinus frequencies
+            freq1 = random.randint(self.freq_min, self.freq_max)
+            while True:
+                freq2 = random.randint(self.freq_min, self.freq_max)
+                if freq1 != freq2:
+                    break
+                elif freq1 == 0:
+                    break
+
+            # Generate other parameters
+            noisecoef = random.uniform(self.noisecoef_min, self.noisecoef_min + 4)
+            startrad = random.randint(self.startrad_min, self.startrad_min + 50)
+            line_width = random.uniform(0.0, self.linewidth_max)
+
+            # Add class to list
+            classes.append(
+                [
+                    nvertex,
+                    norbits,
+                    ovalx,
+                    ovaly,
+                    freq1,
+                    freq2,
+                    noisecoef,
+                    startrad,
+                    line_width,
+                ]
+            )
+
+        return classes
 
     def __iter__(self):
 
-        # Get worker info
-        worker_info = get_worker_info()
-        workers = worker_info.num_workers
-        worker_id = worker_info.id
+        # Compute repeating groups
+        groups_per_step = self.gpus // self.aug_repeats
 
-        # Global sample index to start from
-        idx = self.init_datapoints + worker_id * self.gpus
+        # Comput GPU-Group mapping
+        group_id = self.device // self.aug_repeats
 
+        # Init train step at 0
+        step = 0
         while True:
 
-            shift = self.device
-            for i in range(self.aug_repeats):
+            # Compute idx to return
+            idx = self.init_datapoints + step * groups_per_step + group_id
 
-                # Compute label
-                class_id = self.generate_label(idx + shift)
+            # Compute labels and yield
+            class_id = self.generate_label(idx)
 
-                # Gen image
-                img = self.generate_image(idx + shift, class_id)
+            # Gen image
+            img = self.generate_image(idx, class_id)
+            # Apply data_aug if needed
+            if self.data_aug:
+                img = self.data_aug(img)
 
-                # Apply data_aug if needed
-                if self.data_aug:
-                    img = self.data_aug(img)
+            yield img, class_id
 
-                yield img, class_id
-
-                # Increase shift use modulus
-                shift = (shift + 1) % self.gpus
-
-            # Increase counter for next iteration
-            idx += workers * self.gpus
+            # Increase step
+            step += 1
 
 
 # Wrapper function to use from pretrain.py
@@ -350,12 +460,12 @@ def create_vatom_dataset(
     config = configparser[dataset_cfg_select]
 
     # Create dataset
-    if aug_repeats >= 2:
+    if aug_repeats > 1:
 
         # Check parameters
         assert gpus >= aug_repeats, "One GPU needed for each different augmentation"
 
-        dataset = BAVatomDataset(
+        dataset = VatomDatasetRepeats(
             init_datapoints=init_datapoints,
             nclasses=nclasses,
             res=res,
@@ -372,7 +482,6 @@ def create_vatom_dataset(
             device=device,
             gpus=gpus,
             config=config,
-            aug_repeats=aug_repeats,
         )
 
     return dataset

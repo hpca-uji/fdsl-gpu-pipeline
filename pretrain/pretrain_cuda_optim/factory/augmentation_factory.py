@@ -669,22 +669,14 @@ class VatomPrefetchLoader:
 
         first = True
 
-        # 1. Create PyCUDA stream
+        # Create stream
         pycuda_stream = drv.Stream()
-
-        # 2. Wrap it with a PyTorch external stream
-        torch_generation_stream = torch.cuda.ExternalStream(pycuda_stream.handle)
-
-        # 3. Create a second PyTorch stream for transforms
-        torch_transform_stream = torch.cuda.Stream()
-
-        # 4. Create an event to signal completion
-        kernel_done_event = torch.cuda.Event(blocking=False)
+        torch_stream = torch.cuda.ExternalStream(pycuda_stream.handle)
 
         for idxs, labels in self.loader:
 
             # Enqueue kernel launches + aug on generation stream
-            with torch.cuda.stream(torch_generation_stream):
+            with torch.cuda.stream(torch_stream):
 
                 # preallocate device batch output buffer once per batch
                 # kernel writes a single-channel uint8 image per sample; we keep (B,1,H,W)
@@ -695,8 +687,8 @@ class VatomPrefetchLoader:
                 )
 
                 # Move labels to device (non_blocking) - they might be converted to soft labels by MixUp
-                labels = labels[0]
-                labels = labels.to(self.device, non_blocking=True)
+                labels = labels[0].to(self.device, non_blocking=True)
+                labels_kernel = labels.int()
 
                 # Convert idxs to scalar
                 idxs = idxs.item()
@@ -714,7 +706,7 @@ class VatomPrefetchLoader:
                     np.int32(self.res),
                     np.int32(idxs),
                     np.int32(self.batch_size),
-                    Holder(labels),
+                    Holder(labels_kernel),
                 ]
 
                 # Launch kernel (grid/block values are placeholders—replace with your kernel's choices)
@@ -724,14 +716,6 @@ class VatomPrefetchLoader:
                     block=(self.batch_size, 1, 1),
                     stream=pycuda_stream
                 )
-
-                # Register event
-                kernel_done_event.record(torch_generation_stream)
-
-            with torch.cuda.stream(torch_transform_stream):
-
-                # Wait for event
-                torch_transform_stream.wait_event(kernel_done_event)
 
                 # Expand to 3 channels
                 out = out.repeat(1, 3, 1, 1)
@@ -774,9 +758,7 @@ class VatomPrefetchLoader:
                 first = False
 
             # Ensure main stream waits for generation stream so the returned tensors are ready
-            torch.cuda.current_stream(device=self.device).wait_stream(
-                torch_transform_stream
-            )
+            torch.cuda.current_stream(device=self.device).wait_stream(torch_stream)
 
             # Save prepared batch for next yield
             prev_images = out

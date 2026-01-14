@@ -639,22 +639,14 @@ class VatomPrefetchLoader:
 
         first = True
 
-        # 1. Create PyCUDA stream
+        # Create stream
         pycuda_stream = drv.Stream()
-
-        # 2. Wrap it with a PyTorch external stream
-        torch_generation_stream = torch.cuda.ExternalStream(pycuda_stream.handle)
-
-        # 3. Create a second PyTorch stream for transforms
-        torch_transform_stream = torch.cuda.Stream()
-
-        # 4. Create an event to signal completion
-        kernel_done_event = torch.cuda.Event(blocking=False)
+        torch_stream = torch.cuda.ExternalStream(pycuda_stream.handle)
 
         for idxs, class_ids in self.loader:
 
             # Enqueue kernel launches + aug on generation stream
-            with torch.cuda.stream(torch_generation_stream):
+            with torch.cuda.stream(torch_stream):
 
                 # preallocate device batch output buffer once per batch
                 # kernel writes a single-channel uint8 image per sample; we keep (B,1,H,W)
@@ -673,14 +665,6 @@ class VatomPrefetchLoader:
                     class_id = int(class_ids[i].item())
                     # pass the slice (view) pointing into device memory
                     self.generate_image(out[i, 0], idx, class_id, pycuda_stream)
-
-                # Register event
-                kernel_done_event.record(torch_generation_stream)
-
-            with torch.cuda.stream(torch_transform_stream):
-
-                # Wait for event
-                torch_transform_stream.wait_event(kernel_done_event)
 
                 # Expand to 3 channels
                 out = out.repeat(1, 3, 1, 1)
@@ -723,9 +707,7 @@ class VatomPrefetchLoader:
                 first = False
 
             # Ensure main stream waits for generation stream so the returned tensors are ready
-            torch.cuda.current_stream(device=self.device).wait_stream(
-                torch_transform_stream
-            )
+            torch.cuda.current_stream(device=self.device).wait_stream(torch_stream)
 
             # Save prepared batch for next yield
             prev_images = out

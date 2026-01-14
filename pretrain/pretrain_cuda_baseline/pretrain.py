@@ -506,7 +506,7 @@ group.add_argument(
 )
 group.add_argument(
     "--aug-repeats",
-    type=float,
+    type=int,
     default=0,
     help="Number of augmentation repetitions (distributed training only) (default: 0)",
 )
@@ -598,6 +598,13 @@ group.add_argument(
 )
 group.add_argument(
     "--worker-seeding", type=str, default="all", help="worker seed mode (default: all)"
+)
+group.add_argument(
+    "--dataset-workers",
+    "-j",
+    type=int,
+    default=1,
+    help="Number of workers generating CPU dataset pairs",
 )
 group.add_argument(
     "--log-interval",
@@ -885,14 +892,21 @@ def main():
             model, backend=args.torchcompile, mode=args.torchcompile_mode
         )
 
+    # Check aug repeats and dataset workers compatibility
+    if args.aug_repeats > 1:
+        assert (
+            args.dataset_workers == 1
+        ), "aug_repeats > 1 requires a single dataset worker"
+
     # Create vatom dataset
     dataset_train = create_vatom_dataset(
         dataset_cfg_path=args.dataset_cfg_path,
         dataset_cfg_select=args.dataset_cfg_select,
-        device=args.rank,
-        gpus=args.world_size,
         init_datapoints=init_datapoints,
         nclasses=args.num_classes,
+        aug_repeats=args.aug_repeats,
+        device=args.rank,
+        gpus=args.world_size,
     )
 
     # Read parameters to create prefetcher
@@ -901,7 +915,7 @@ def main():
     loader_base = DataLoader(
         dataset_train,
         batch_size=args.batch_size,
-        num_workers=4,
+        num_workers=args.dataset_workers,
         pin_memory=True,
     )
 

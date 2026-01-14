@@ -1,16 +1,13 @@
 #!/bin/bash
 
-# Activate virtualenv
-source $HOME/localenvs/rtfdslenv/bin/activate
-
 ## Parameters ##
 
 # Dataset
 DATASET_CFG="../config/classes.cfg"
 DATASET_SIZE=300000256
-DATASET_SIZE=128
 RES=224
 KERNEL_RES=512
+DATASET_WORKERS=8
 
 # Model Parameters
 MODEL="deit_tiny_patch16_224"
@@ -23,7 +20,7 @@ WARMUP_ITERS=5000
 LR=0.001
 OPT="adamw"
 WEIGHT_DECAY=0.05
-BATCH_SIZE=128
+BATCH_SIZE=256
 SCHED="step"
 
 # Data augmentation parameters
@@ -37,8 +34,8 @@ DROP_PATH=0.1
 SMOOTHING=0.1
 
 # Pretrain
-nsys profile -o baseprof --trace=cuda,nvtx torchrun --nproc_per_node=1 pretrain.py \
-    --dataset-cfg-path $DATASET_CFG --dataset-size $DATASET_SIZE \
+torchrun --nproc_per_node=1 pretrain.py \
+    --dataset-cfg-path $DATASET_CFG --dataset-size $DATASET_SIZE -j $DATASET_WORKERS \
     --res $RES --kernel-res $KERNEL_RES --experiment baseline \
     --model $MODEL --num-classes $NUM_CLASSES --amp --log-interval 50 \
     --warmup-iters $WARMUP_ITERS --lr $LR --opt $OPT --weight-decay $WEIGHT_DECAY -b $BATCH_SIZE --sched $SCHED \

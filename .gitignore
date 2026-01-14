@@ -3,3 +3,6 @@
 
 # Ignore training output folders
 **/output
+
+# Ignore progress log files
+progress.txt
