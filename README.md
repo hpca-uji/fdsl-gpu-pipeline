@@ -1,4 +1,4 @@
-# Infinite Data, Zero I/O: A CUDA-Optimized Framework for On-the-Fly Synthetic Data Generation for Deep Learning Pretraining (PDP 2026 Submission)
+# Infinite Data, Zero I/O: A CUDA-Optimized Framework for On-the-Fly Synthetic Data Generation for Deep Learning Pretraining (PDP 2026 Accepted Paper)
 
 This repository contains the source code accompanying the paper: "Formula-Driven Supervised Learning at Scale: Overcoming HPC I/O Bottlenecks with Real-Time CUDA Data Synthesis" (submitted to PDP 2026).
 
