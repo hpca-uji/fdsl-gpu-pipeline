@@ -544,6 +544,7 @@ class VatomPrefetchLoader:
         batch_size: int,
         classes: list,
         res: int = 224,
+        kernel_res: int = 512,
         nclasses: int = 1000,
         norbits_max: int = 200,
         nvertex_max: int = 1000,
@@ -567,6 +568,7 @@ class VatomPrefetchLoader:
         self.device = device
         self.batch_size = batch_size
         self.res = res
+        self.kernel_res = kernel_res
         self.classes = classes
         self.nclasses = nclasses
         self.label_smoothing = label_smoothing
@@ -681,7 +683,7 @@ class VatomPrefetchLoader:
                 # preallocate device batch output buffer once per batch
                 # kernel writes a single-channel uint8 image per sample; we keep (B,1,H,W)
                 out = torch.zeros(
-                    (self.batch_size, 1, self.res, self.res),
+                    (self.batch_size, 1, self.kernel_res, self.kernel_res),
                     dtype=torch.uint8,
                     device=self.device,
                 )
@@ -703,7 +705,7 @@ class VatomPrefetchLoader:
                     np.int32(self.totalvertex_max),
                     np.int32(self.norbits_max),
                     *self.classes,
-                    np.int32(self.res),
+                    np.int32(self.kernel_res),
                     np.int32(idxs),
                     np.int32(self.batch_size),
                     Holder(labels_kernel),

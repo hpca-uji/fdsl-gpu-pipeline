@@ -34,7 +34,7 @@ import torch.distributed as dist
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import torchvision.utils
+from torchvision.utils import save_image
 from torch.profiler import (
     profile,
     ProfilerActivity,
@@ -111,7 +111,7 @@ group.add_argument(
     "--res", type=int, help="Image resolution of generated images", default=224
 )
 group.add_argument(
-    "--kernel-res", type=int, help="Image resolution of generated images", default=224
+    "--kernel-res", type=int, help="Image resolution of generated images", default=512
 )
 # Model parameters
 group = parser.add_argument_group("Model parameters")
@@ -927,6 +927,8 @@ def main():
         batch_size=args.batch_size,
         classes=classes,
         nclasses=args.num_classes,
+        res=args.res,
+        kernel_res=args.kernel_res,
         norbits_max=norbits_max,
         nvertex_max=nvertex_max,
         num_ops=args.num_ops,
@@ -1191,7 +1193,7 @@ def train_loaderfull(
                     )
 
                     if args.save_images and output_dir:
-                        torchvision.utils.save_image(
+                        save_image(
                             input,
                             os.path.join(output_dir, f"train-batch-{num_updates}.jpg"),
                             padding=0,
